@@ -1,9 +1,17 @@
 package com.model2.mvc.web.product;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.fileupload.DiskFileUpload;
+import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload.FileUpload;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +27,7 @@ import com.model2.mvc.common.Page;
 import com.model2.mvc.common.Search;
 import com.model2.mvc.service.domain.Product;
 import com.model2.mvc.service.product.ProductService;
+import com.model2.mvc.service.product.impl.ProductServiceImpl;
 
 
 
@@ -62,16 +71,100 @@ public class ProductController {
 	
 	
 	@RequestMapping(value="addProduct", method=RequestMethod.POST)
-	public ModelAndView addProduct( @ModelAttribute("product") Product product ) throws Exception {
+	public ModelAndView addProduct( @ModelAttribute("product") Product product, 
+														HttpServletRequest request, 
+														HttpServletResponse response) throws Exception {
 
 		System.out.println("/product/addProduct");
 		
+		if(FileUpload.isMultipartContent(request)){
+			//==>Eclipse workspace / Project 변경시 변경할 것
+			//String temDir = "D:\\workspace03(Project & analysis)\\9941.1.1.Model2MVCShop(ins)\\WebContent\\images\\uploadFiles\\";
+			String temDir = "C:\\Users\\Admin\\git\\07.Model2MVCShop(URI,pattern)\\07.Model2MVCShop(URI,pattern)\\WebContent\\images\\uploadFiles\\";
+			//String temDir = ".";
+			//String temDir2 = "/uploadFiles/";
+			
+			DiskFileUpload fileUpload = new DiskFileUpload();
+			fileUpload.setRepositoryPath(temDir);
+			//setSizeThreshold의 크기를 벗어나게되면 지정한 위치에 임시로 저장한다.
+			fileUpload.setSizeMax(1024 * 1024 * 10);
+			//최대 1메가 까지 업로드 가능 (1024 * 1024 * 100) <- 100MB
+			fileUpload.setSizeThreshold(1024 * 100); // 한번에 100k 까지는 메모리에 저장
+			
+			if(request.getContentLength() < fileUpload.getSizeMax()){
+				
+				//Product product = new Product();
+				product = new Product();
+				
+				StringTokenizer token = null;
+				
+				//parseRequest()는 Fileitem을 포함하고 있는 List 타입을 리턴한다.
+				List fileItemList = fileUpload.parseRequest(request);
+				int Size = fileItemList.size(); // html page에서 받은 값들의 개수를 구한다.
+				for(int i = 0; i < Size; i++){
+					FileItem fileItem = (FileItem)fileItemList.get(i);
+					// isFormField()를 통해서 파일형식인지 파라미터인지 구분한다. 파라미터라면 true
+					if(fileItem.isFormField()){
+						if(fileItem.getFieldName().equals("manuDate")){
+							token = new StringTokenizer(fileItem.getString("euc-kr"), "-");
+							String manuDate = token.nextToken()+token.nextToken()+token.nextToken();
+							product.setManuDate(manuDate);
+						}
+						else if(fileItem.getFieldName().equals("prodName")){
+							product.setProdName(fileItem.getString("euc-kr"));
+						}
+						else if(fileItem.getFieldName().equals("prodDetail")){
+							product.setProdDetail(fileItem.getString("euc-kr"));
+						}
+						else if(fileItem.getFieldName().equals("price")){
+							product.setPrice(Integer.parseInt(fileItem.getString("euc-kr")));
+						}
+					}else{ // 파일형식이면
+						// out.print("파일 : "+fileItem.getFieldName() + " = " +fileItem.getName());
+						// out.print("("+fileItem.getSize() + "byte)<br>");
+							
+						if(fileItem.getSize() > 0){ //파일을 저장하는 if
+							int idx = fileItem.getName().lastIndexOf("\\");
+							// getName()은 경로를 다 가져오기 때문에 lastIndexOf 로 잘라낸다.
+							if(idx == -1){
+								idx = fileItem.getName().lastIndexOf("/");
+							}
+							String fileName = fileItem.getName().substring(idx+1);
+							product.setFileName(fileName);
+							try{
+								File uploadedFile = new File(temDir, fileName);
+								fileItem.write(uploadedFile);
+							}catch(IOException e){
+								System.out.println(e);
+							}
+						}else{
+							product.setFileName("../../images/empty.GIF");
+						}
+					}// else
+				}// for
+				
+//				ProductServiceImpl service = new ProductServiceImpl();
+//				service.addProduct(product);
+					
+				request.setAttribute("prodvo", product);
+			}else{ // 업로드하는 파일이 setSizeMax 보다 큰 경우
+				int overSize = (request.getContentLength() / 1000000);
+				System.out.println("<script>alert('파일의 크기는 1MB까지 입니다. 올리신 파일 용량은 "+overSize+" = MB입니다.");
+				System.out.println("history.back();</script>");
+			}
+		}else{
+			System.out.println("인코딩 타입이 multipart/form-data가 아닙니다");
+		}
+	
+		System.out.println("\n\n\n\198236981698"+product);
+	
 		//Business Logic 후 Model(data) / View(jsp) 정보를 갖는 ModelAndView 생성
 		product.setManuDate(product.getManuDate().replace("-", "")); //because of DB type or size...
 		productService.addProduct(product);
 		
 		ModelAndView modelAndView = new ModelAndView();
-		modelAndView.setViewName("/product/listProduct");
+		modelAndView.addObject(product);
+		modelAndView.setViewName("/product/addProduct.jsp");
 		
 		return modelAndView;
 	}
